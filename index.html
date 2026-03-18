@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Snake</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #0f0;
+      user-select: none;
+    }
+    h1 { font-size: 2rem; letter-spacing: 4px; margin-bottom: 10px; }
+    #scoreboard {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 12px;
+      font-size: 1rem;
+      letter-spacing: 2px;
+    }
+    #canvas {
+      border: 2px solid #0f0;
+      box-shadow: 0 0 20px #0f06;
+      background: #000;
+    }
+    #message {
+      margin-top: 14px;
+      font-size: 0.95rem;
+      letter-spacing: 2px;
+      color: #0f0a;
+      min-height: 1.2em;
+    }
+    #controls {
+      margin-top: 18px;
+      font-size: 0.75rem;
+      color: #0f05;
+      letter-spacing: 1px;
+      text-align: center;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>SNAKE</h1>
+  <div id="scoreboard">
+    <span>SCORE: <b id="score">0</b></span>
+    <span>BEST: <b id="best">0</b></span>
+    <span>LEVEL: <b id="level">1</b></span>
+  </div>
+  <canvas id="canvas" width="400" height="400"></canvas>
+  <div id="message">Press SPACE or tap to start</div>
+  <div id="controls">
+    Arrow Keys / WASD to move &nbsp;|&nbsp; SPACE to pause<br>
+    Mobile: swipe to change direction
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const levelEl = document.getElementById('level');
+    const msgEl = document.getElementById('message');
+
+    const GRID = 20;
+    const COLS = canvas.width / GRID;
+    const ROWS = canvas.height / GRID;
+
+    let snake, dir, nextDir, food, score, best, level, speed, loop, state;
+    // state: 'idle' | 'running' | 'paused' | 'dead'
+
+    best = parseInt(localStorage.getItem('snakeBest') || '0');
+    bestEl.textContent = best;
+
+    function init() {
+      snake = [
+        { x: 10, y: 10 },
+        { x: 9,  y: 10 },
+        { x: 8,  y: 10 },
+      ];
+      dir = { x: 1, y: 0 };
+      nextDir = { x: 1, y: 0 };
+      score = 0;
+      level = 1;
+      speed = 150;
+      scoreEl.textContent = 0;
+      levelEl.textContent = 1;
+      placeFood();
+      state = 'running';
+      msgEl.textContent = '';
+      if (loop) clearInterval(loop);
+      loop = setInterval(tick, speed);
+    }
+
+    function placeFood() {
+      let pos;
+      do {
+        pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+      } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+      food = pos;
+    }
+
+    function tick() {
+      dir = nextDir;
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+      // Wall collision
+      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+        return gameOver();
+      }
+      // Self collision
+      if (snake.some(s => s.x === head.x && s.y === head.y)) {
+        return gameOver();
+      }
+
+      snake.unshift(head);
+
+      if (head.x === food.x && head.y === food.y) {
+        score += 10 * level;
+        scoreEl.textContent = score;
+        if (score > best) {
+          best = score;
+          bestEl.textContent = best;
+          localStorage.setItem('snakeBest', best);
+        }
+        // Level up every 5 food
+        if (score % (5 * 10 * level) === 0) {
+          level++;
+          levelEl.textContent = level;
+          speed = Math.max(60, 150 - (level - 1) * 15);
+          clearInterval(loop);
+          loop = setInterval(tick, speed);
+        }
+        placeFood();
+      } else {
+        snake.pop();
+      }
+
+      draw();
+    }
+
+    function gameOver() {
+      clearInterval(loop);
+      state = 'dead';
+      msgEl.textContent = `GAME OVER — score: ${score} — SPACE to restart`;
+      drawDeadFlash();
+    }
+
+    function drawDeadFlash() {
+      let flashes = 0;
+      const iv = setInterval(() => {
+        ctx.fillStyle = flashes % 2 === 0 ? '#300' : '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        draw(true);
+        if (++flashes >= 6) clearInterval(iv);
+      }, 100);
+    }
+
+    function draw(dead = false) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Grid dots
+      ctx.fillStyle = '#0f01';
+      for (let x = 0; x < COLS; x++)
+        for (let y = 0; y < ROWS; y++)
+          ctx.fillRect(x * GRID + GRID / 2 - 1, y * GRID + GRID / 2 - 1, 2, 2);
+
+      // Food
+      const fx = food.x * GRID, fy = food.y * GRID;
+      ctx.fillStyle = '#f00';
+      ctx.shadowColor = '#f00';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(fx + GRID / 2, fy + GRID / 2, GRID / 2 - 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Snake
+      snake.forEach((seg, i) => {
+        const sx = seg.x * GRID, sy = seg.y * GRID;
+        const t = i / snake.length;
+        if (dead) {
+          ctx.fillStyle = `hsl(0, 80%, ${40 - t * 20}%)`;
+        } else {
+          ctx.fillStyle = i === 0
+            ? '#00ff44'
+            : `hsl(${130 - t * 30}, 90%, ${50 - t * 20}%)`;
+        }
+        ctx.fillRect(sx + 1, sy + 1, GRID - 2, GRID - 2);
+
+        // Eye on head
+        if (i === 0) {
+          ctx.fillStyle = '#000';
+          const ex = dir.x === 1 ? sx + GRID - 5 : dir.x === -1 ? sx + 3 : sx + GRID / 2 - 1;
+          const ey = dir.y === 1 ? sy + GRID - 5 : dir.y === -1 ? sy + 3 : sy + GRID / 2 - 5;
+          const ex2 = dir.x !== 0 ? ex : sx + GRID / 2 + 3;
+          const ey2 = dir.y !== 0 ? ey + 5 : ey;
+          ctx.fillRect(ex, ey, 3, 3);
+          ctx.fillRect(ex2, ey2, 3, 3);
+        }
+      });
+    }
+
+    // Draw initial idle screen
+    function drawIdle() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0f04';
+      for (let x = 0; x < COLS; x++)
+        for (let y = 0; y < ROWS; y++)
+          ctx.fillRect(x * GRID + GRID / 2 - 1, y * GRID + GRID / 2 - 1, 2, 2);
+      ctx.fillStyle = '#0f0';
+      ctx.font = 'bold 32px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('SNAKE', canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = '14px Courier New';
+      ctx.fillStyle = '#0f08';
+      ctx.fillText('Press SPACE or tap to start', canvas.width / 2, canvas.height / 2 + 24);
+    }
+
+    state = 'idle';
+    drawIdle();
+
+    // Keyboard controls
+    const DIRS = {
+      ArrowUp:    { x: 0, y: -1 }, w: { x: 0, y: -1 },
+      ArrowDown:  { x: 0, y:  1 }, s: { x: 0, y:  1 },
+      ArrowLeft:  { x: -1, y: 0 }, a: { x: -1, y: 0 },
+      ArrowRight: { x: 1,  y: 0 }, d: { x: 1,  y: 0 },
+    };
+
+    document.addEventListener('keydown', e => {
+      const d = DIRS[e.key] || DIRS[e.key.toLowerCase()];
+      if (d) {
+        e.preventDefault();
+        if (state === 'idle' || state === 'dead') { init(); return; }
+        if (state === 'paused') { resume(); return; }
+        // Prevent reversing
+        if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
+      }
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state === 'idle' || state === 'dead') init();
+        else if (state === 'running') pause();
+        else if (state === 'paused') resume();
+      }
+    });
+
+    function pause() {
+      clearInterval(loop);
+      state = 'paused';
+      msgEl.textContent = 'PAUSED — SPACE to resume';
+    }
+    function resume() {
+      state = 'running';
+      msgEl.textContent = '';
+      loop = setInterval(tick, speed);
+    }
+
+    // Touch / swipe controls
+    let touchStart = null;
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      if (state === 'idle' || state === 'dead') init();
+      else if (state === 'paused') resume();
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+      if (!touchStart || state !== 'running') return;
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      let d;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        d = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+      } else {
+        d = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+      }
+      if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
+      touchStart = null;
+    }, { passive: false });
+  </script>
+</body>
+</html>
