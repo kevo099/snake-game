@@ -24,3 +24,7 @@ python3 -m http.server 8000   # then visit http://localhost:8000
 ## Tech
 
 Plain HTML + CSS + JavaScript on a `<canvas>`. That's it.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
